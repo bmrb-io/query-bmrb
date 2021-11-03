@@ -20,7 +20,7 @@ for entry in get_entries():
     entities = entry.get_saveframes_by_category('entity')
     for entity in entities:
         if entity['Nonpolymer_comp_id'][0] == 'ZN' or entity['Nonpolymer_comp_id'][0] == 'CD':
-            zinc_or_cadmium_entity_ids.append(entity['ID'])
+            zinc_or_cadmium_entity_ids.append(entity['ID'][0])
 
     if len(zinc_or_cadmium_entity_ids) == 0:
         continue
@@ -39,16 +39,28 @@ for entry in get_entries():
     filtered_bond = bond.filter(['Type', 'Comp_ID_1', 'Atom_ID_1', 'Comp_ID_2', 'Entity_ID_2'])
 
     # Check that we have the right matching values
-    matched_entity_ids = set()
+    matched_entity_ids = {}
     for row in filtered_bond:
         if row[0] == 'coordination' and (row[1] == 'CYS' or row[1] == 'HIS') and row[2] == 'SG' and \
                 (row[3] == 'ZN' or row[3] == 'CD'):
-            matched_entity_ids.add(row[4])
+            if row[4] not in matched_entity_ids:
+                matched_entity_ids[row[4]] = 1
+            else:
+                matched_entity_ids[row[4]] += 1
 
-    # Check that every zinc or cadmium atom is bound
-    # This could be tweaked to ensure each ZN/CD is bound twice, etc.
-    if len(matched_entity_ids) != len(zinc_or_cadmium_entity_ids):
-        continue
+    # Check that every zinc or cadmium atom is bound at least twice
+    for key in matched_entity_ids:
+        if matched_entity_ids[key] < 2:
+            # Skip this entry, because there is a zinc/cadmium which is only bound once
+            #print(f'Skipping entry {entry.id} because it has zn/cd with entity ID {matched_entity_ids[key]} which is '
+            #      f'not bound at least twice.')
+            continue
+
+    # Ensure that every zn/cd is bound
+    for entity_id in zinc_or_cadmium_entity_ids:
+        if entity_id not in matched_entity_ids:
+            #print(f'Skipping entry {entry.entry_id} because there is a zn/cd which is not bound at all.')
+            continue
 
     print('Found matching protein: ', entry.entry_id)
     matching_pdb_entries = entry.get_tag('_Related_entries.Database_accession_code')
